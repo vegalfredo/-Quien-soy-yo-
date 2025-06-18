@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego: ¿Quién soy?</title>
+    <!-- Carga la librería de confeti desde internet -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        /* CSS para los estilos del juego */
+        body, html {
+            margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+            background-color: #1a1a1a; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex; justify-content: center; align-items: center; text-align: center;
+        }
+
+        /* --- CONTENEDORES PRINCIPALES --- */
+        #contenedor-principal {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        #contenedor-ruleta {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.9); display: none;
+            justify-content: center; align-items: center; z-index: 1000;
+        }
+
+        /* --- CONTENEDOR DEL JUEGO (RESPONSIVE CON CSS GRID) --- */
+        #contenedor-juego {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #1a1a1a; z-index: 2000;
+            
+            /* LÍNEAS CLAVE PARA OCULTAR AL INICIO */
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+
+            /* Configuración de la cuadrícula */
+            display: grid;
+            grid-template-columns: 1fr; /* Una columna para móviles (vertical) */
+            grid-template-rows: auto 1fr; /* Fila para imagen, resto para el panel de tiempo */
+            gap: 10px; padding: 20px; box-sizing: border-box;
+            align-items: center; justify-items: center;
+        }
+
+        /* Media Query para pantallas anchas (horizontal) */
+        @media (orientation: landscape) and (min-width: 700px) {
+            #contenedor-juego {
+                grid-template-columns: 1fr 1fr; /* Dos columnas */
+                grid-template-rows: 1fr; /* Una sola fila */
+            }
+        }
+
+        /* --- ELEMENTOS DENTRO DEL JUEGO --- */
+        #imagen-seleccionada {
+            max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 20px;
+        }
+        #panel-derecho { /* Contenedor para temporizador y botón stop */
+            display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%;
+        }
+        #temporizador {
+            font-size: clamp(4em, 15vw, 10em); /* Fuente adaptable */
+            font-weight: bold;
+        }
+        #stop-button {
+            margin-top: 20px; padding: 15px 30px; font-size: 1.5em; cursor: pointer;
+            border: none; border-radius: 10px; background-color: #f44336; color: white;
+        }
+
+        /* --- BOTONES DE ACCIÓN (VICTORIA Y REINICIO) --- */
+        .action-button {
+            position: fixed; width: 50px; height: 50px; font-size: 1.5em; cursor: pointer;
+            border: 2px solid white; border-radius: 50%; color: white; z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        #reset-button { top: 20px; right: 20px; }
+        #victory-button {
+            top: 20px; left: 20px; border-color: #FFD700; color: #FFD700;
+            display: none; /* Oculto hasta que empiece el juego */
+        }
+        
+        /* --- OTROS ELEMENTOS --- */
+        #start-button {
+            padding: 20px 40px; font-size: 2em; cursor: pointer; border: none;
+            border-radius: 10px; background-color: #4CAF50; color: white;
+        }
+        #imagen-ruleta {
+            max-width: 80vw; max-height: 80vh; border-radius: 20px;
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    
+    <button id="reset-button" class="action-button" title="Reiniciar Juego">↻</button>
+    <button id="victory-button" class="action-button" title="¡Victoria!">✓</button>
+
+    <div id="contenedor-principal">
+        <h1>¿Quién soy?</h1>
+        <button id="start-button">¡Empezar Juego!</button>
+    </div>
+
+    <div id="contenedor-ruleta">
+        <img id="imagen-ruleta" src="" alt="Ruleta de personajes">
+    </div>
+
+    <div id="contenedor-juego">
+        <!-- AQUÍ CARGAMOS EL SLOGAN POR DEFECTO -->
+        <img id="imagen-seleccionada" src="imagenes/slogan.png" alt="Personaje del juego">
+        
+        <div id="panel-derecho">
+            <div id="temporizador">3:00</div>
+            <button id="stop-button">Detener Tiempo</button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        const duracionRuleta = 10000;
+        const duracionJuego = 180;
+        const velocidadRuleta = 50;
+        // Asegúrate de que los nombres de archivo sean correctos
+        const nombresImagenes = [
+            "Ajolote.png", "Albert Einstein.png", "Ana Gabriela Guevara.png", "Angela Aguilar.png",
+            "Batimovil.png", "Chichén Itza.png", "CR7.png", "Donald Trump.png", "El Chavo del Ocho.png",
+            "EL PAPA FRANCISCO.png", "El Titanic.png", "EXPRESO A HOGWARTS.png", "FRIDA KAHLO.png",
+            "Juan Gabriel.png", "La chilindrina.png", "León-oh.png", "MEDUSA.png", "Morgan Freeman.png",
+            "Palacio de las Bellas Artes.png", "Paquita la del Barrio.png", "Pedro Infante.png", "PIKACHU.png",
+            "Ricardo Arjona.png", "Sor Juana Inés de la Cruz.png", "Superman.png", "Tigre.png",
+            "TORRE EIFFEL.png", "Wonder Woman.png"
+        ];
+        
+        // --- ELEMENTOS DEL DOM Y SONIDOS ---
+        const startButton = document.getElementById('start-button');
+        const ruletaContainer = document.getElementById('contenedor-ruleta');
+        const ruletaImagen = document.getElementById('imagen-ruleta');
+        const juegoContainer = document.getElementById('contenedor-juego');
+        const imagenSeleccionada = document.getElementById('imagen-seleccionada');
+        const temporizadorDisplay = document.getElementById('temporizador');
+        const stopButton = document.getElementById('stop-button');
+        const resetButton = document.getElementById('reset-button');
+        const victoryButton = document.getElementById('victory-button');
+
+        const sonidoTicTac = new Audio('sonidos/tictac.mp3');
+        sonidoTicTac.loop = true;
+        const sonidoAlarma = new Audio('sonidos/alarma.mp3');
+        const sonidoVictoria = new Audio('sonidos/victoria.mp3');
+
+        let ruletaIntervalo, temporizadorIntervalo;
+        let tiempoRestante = duracionJuego;
+
+        // --- MANEJADORES DE EVENTOS ---
+        resetButton.addEventListener('click', () => window.location.reload());
+        startButton.addEventListener('click', iniciarJuego);
+        stopButton.addEventListener('click', detenerTemporizador);
+        victoryButton.addEventListener('click', celebrarVictoria);
+
+        // --- LÓGICA DEL JUEGO ---
+        function iniciarJuego() {
+            document.getElementById('contenedor-principal').style.display = 'none';
+            ruletaContainer.style.display = 'flex';
+            
+            ruletaIntervalo = setInterval(() => {
+                const imagenAleatoria = nombresImagenes[Math.floor(Math.random() * nombresImagenes.length)];
+                ruletaImagen.src = 'imagenes/' + imagenAleatoria;
+            }, velocidadRuleta);
+
+            setTimeout(detenerRuleta, duracionRuleta);
+        }
+
+        function detenerRuleta() {
+            clearInterval(ruletaIntervalo);
+            // La última imagen que se mostró en la ruleta es la elegida
+            const imagenFinalSrc = ruletaImagen.src;
+            ruletaContainer.style.display = 'none';
+            
+            // Actualizamos la imagen del eslogan por la del personaje
+            imagenSeleccionada.src = imagenFinalSrc;
+
+            // Mostramos el contenedor del juego con una transición suave
+            juegoContainer.style.visibility = 'visible';
+            juegoContainer.style.opacity = '1';
+            
+            victoryButton.style.display = 'flex';
+            
+            iniciarTemporizador();
+        }
+
+        function iniciarTemporizador() {
+            tiempoRestante = duracionJuego;
+            actualizarDisplayTiempo();
+            sonidoTicTac.play();
+            temporizadorIntervalo = setInterval(() => {
+                tiempoRestante--;
+                actualizarDisplayTiempo();
+                if (tiempoRestante <= 0) finalizarTiempo(false);
+            }, 1000);
+        }
+        
+        function detenerTemporizador() {
+            clearInterval(temporizadorIntervalo);
+            sonidoTicTac.pause();
+            sonidoTicTac.currentTime = 0;
+        }
+
+        function actualizarDisplayTiempo() {
+            const minutos = Math.floor(tiempoRestante / 60);
+            let segundos = tiempoRestante % 60;
+            segundos = segundos < 10 ? '0' + segundos : segundos;
+            temporizadorDisplay.textContent = `${minutos}:${segundos}`;
+        }
+        
+        function finalizarTiempo(esVictoria) {
+            detenerTemporizador();
+            stopButton.style.display = 'none';
+            victoryButton.style.display = 'none';
+
+            if (esVictoria) {
+                sonidoVictoria.play();
+                lanzarConfeti();
+                temporizadorDisplay.textContent = "¡GANASTE!";
+            } else {
+                sonidoAlarma.play();
+                temporizadorDisplay.textContent = "¡TIEMPO!";
+            }
+        }
+
+        function celebrarVictoria() {
+            finalizarTiempo(true);
+        }
+
+       function lanzarConfeti() {
+    // 1. Crear un canvas temporal para el confeti
+    const canvas = document.createElement('canvas');
+    document.body.appendChild(canvas);
+
+    // 2. Asegurarse de que el canvas esté encima de todo y ocupe toda la pantalla
+    canvas.style.position = 'fixed';
+    canvas.style.top = '0px';
+    canvas.style.left = '0px';
+    canvas.style.width = '100vw';
+    canvas.style.height = '100vh';
+    canvas.style.pointerEvents = 'none'; // Para poder hacer clic "a través" de él
+    canvas.style.zIndex = '99999'; // Un z-index muy alto para estar por encima de todo
+
+    // 3. Crear el confeti asociado a nuestro canvas específico
+    const miConfeti = confetti.create(canvas, {
+        resize: true,
+        useWorker: true
+    });
+
+    // 4. Lanzar las animaciones
+    // Efecto de explosión desde el centro
+    miConfeti({
+        particleCount: 150,
+        spread: 100,
+        origin: { y: 0.6 }
+    });
+    // Efecto de serpentinas desde las esquinas
+    miConfeti({
+        particleCount: 40,
+        angle: 60,
+        spread: 60,
+        origin: { x: 0 },
+        shapes: ['square']
+    });
+    miConfeti({
+        particleCount: 40,
+        angle: 120,
+        spread: 60,
+        origin: { x: 1 },
+        shapes: ['square']
+    });
+    
+    // 5. (Opcional pero recomendado) Eliminar el canvas después de la animación
+    setTimeout(() => {
+        document.body.removeChild(canvas);
+    }, 5000); // Se elimina después de 5 segundos
+}
+    </script>
+</body>
+</html>
