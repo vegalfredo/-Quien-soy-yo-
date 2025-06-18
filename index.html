@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     
     <style>
-        /* CSS de la versión que SÍ funcionaba visualmente */
+        /* CSS que ya funcionaba visualmente */
         body, html {
             margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
             background-color: #1a1a1a; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -19,11 +19,11 @@
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            box-sizing: border-box; /* Importante para que el padding no afecte */
+            box-sizing: border-box;
         }
         
         #contenedor-principal {
-            /* No necesita display: none, es la pantalla inicial */
+            /* Pantalla inicial, visible por defecto */
         }
 
         #contenedor-ruleta, #contenedor-juego {
@@ -36,7 +36,7 @@
 
         #contenedor-juego {
             background-color: #1a1a1a; z-index: 2000;
-            display: none; /* Empezamos con el contenedor oculto */
+            display: none;
             grid-template-columns: 1fr;
             grid-template-rows: auto 1fr;
             gap: 10px; padding: 20px;
@@ -120,6 +120,7 @@
         const duracionRuleta = 10000;
         const duracionJuego = 180;
         const velocidadRuleta = 50;
+        const cantidadImagenesRuleta = 15;
         const nombresImagenes = [
             "Ajolote.png", "Albert Einstein.png", "Ana Gabriela Guevara.png", "Angela Aguilar.png",
             "Batimovil.png", "Chichén Itza.png", "CR7.png", "Donald Trump.png", "El Chavo del Ocho.png",
@@ -148,17 +149,13 @@
 
         let ruletaIntervalo, temporizadorIntervalo;
         let tiempoRestante = duracionJuego;
+        let listaRuleta = [];
 
-        // --- PRECARGA Y LÓGICA DEL JUEGO ---
+        // --- PRECARGA (SIN CAMBIOS) ---
         function precargarImagenes() {
             let imagenesCargadas = 0;
             const totalImagenes = nombresImagenes.length;
-            
-            if (totalImagenes === 0) {
-                habilitarBotonInicio();
-                return;
-            }
-
+            if (totalImagenes === 0) { habilitarBotonInicio(); return; }
             startButton.textContent = `Cargando... (0/${totalImagenes})`;
 
             nombresImagenes.forEach(nombreArchivo => {
@@ -188,31 +185,41 @@
         
         window.onload = precargarImagenes;
         
+        // --- MANEJADORES DE EVENTOS ---
         resetButton.addEventListener('click', () => window.location.reload());
         startButton.addEventListener('click', iniciarJuego);
         stopButton.addEventListener('click', detenerTemporizador);
         victoryButton.addEventListener('click', celebrarVictoria);
         
+        // --- LÓGICA DEL JUEGO ---
         function iniciarJuego() {
             document.getElementById('contenedor-principal').style.display = 'none';
-            ruletaContainer.style.display = 'flex'; // Muestra la ruleta
+            ruletaContainer.style.display = 'flex';
+            const imagenesBarajadas = [...nombresImagenes].sort(() => 0.5 - Math.random());
+            listaRuleta = imagenesBarajadas.slice(0, cantidadImagenesRuleta);
+            let indiceRuleta = 0;
             ruletaIntervalo = setInterval(() => {
-                const imagenAleatoria = nombresImagenes[Math.floor(Math.random() * nombresImagenes.length)];
-                ruletaImagen.src = 'imagenes/' + imagenAleatoria;
+                ruletaImagen.src = 'imagenes/' + listaRuleta[indiceRuleta];
+                indiceRuleta = (indiceRuleta + 1) % listaRuleta.length;
             }, velocidadRuleta);
             setTimeout(detenerRuleta, duracionRuleta);
         }
 
+        // --- VERSIÓN DEFINITIVA DE DETENER RULETA CON .ONLOAD ---
         function detenerRuleta() {
             clearInterval(ruletaIntervalo);
-            const imagenFinalSrc = ruletaImagen.src;
-            ruletaContainer.style.display = 'none'; // Oculta la ruleta
+            ruletaContainer.style.display = 'none';
+            
+            const imagenFinalAleatoria = nombresImagenes[Math.floor(Math.random() * nombresImagenes.length)];
+            const imagenFinalSrc = 'imagenes/' + imagenFinalAleatoria;
+            
+            imagenSeleccionada.onload = () => {
+                juegoContainer.style.display = 'grid';
+                victoryButton.style.display = 'flex';
+                iniciarTemporizador();
+            };
             
             imagenSeleccionada.src = imagenFinalSrc;
-            juegoContainer.style.display = 'grid'; // Muestra la pantalla de juego
-            
-            victoryButton.style.display = 'flex';
-            iniciarTemporizador();
         }
 
         // --- RESTO DE FUNCIONES (SIN CAMBIOS) ---
@@ -250,7 +257,9 @@
                 temporizadorDisplay.textContent = "¡TIEMPO!";
             }
         }
-        function celebrarVictoria() { finalizarTiempo(true); }
+        function celebrarVictoria() {
+            finalizarTiempo(true);
+        }
         function lanzarConfeti() {
             const canvas = document.createElement('canvas');
             document.body.appendChild(canvas);
